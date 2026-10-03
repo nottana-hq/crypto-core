@@ -1,0 +1,29 @@
+Copyright (c) 2026 Nottana. All rights reserved.
+
+This source code is published for INSPECTION AND VERIFICATION.
+
+Nottana states that its clients encrypt vault data on the user's device and that
+its servers cannot read it. These files are the part of the system where that
+statement is either true or false, and they are published so the statement can be
+checked rather than taken on trust.
+
+You may:
+
+  - read, download, fork and analyse this code
+  - run it for the purpose of verifying the claims it supports
+  - quote from it, including publicly, when reporting a problem or describing a
+    weakness you have found
+
+You may not:
+
+  - use this code, in whole or in part, in other software
+  - redistribute it as part of another product or service
+  - remove or alter this notice
+
+No warranty of any kind is given. Publication does not constitute a security
+audit; it is our own work, offered for review rather than independently
+certified.
+
+Found an error, in the code or in the claims it supports? Open an issue, or write
+to security@nottana.com. A statement of ours that this code contradicts is a bug
+and we want to know about it.
