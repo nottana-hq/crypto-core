@@ -21,13 +21,13 @@ Four files, around 940 lines, each importing only `crypto-browserify` and a
 `Buffer` polyfill, or the browser's own WebCrypto. None touches `document`,
 `window`, `localStorage`, cookies or the network.
 
-- `src/decrypt-core.js` — the item format: the `v2:` AES-256-GCM envelope, the
+- `src/decrypt-core.js`: the item format: the `v2:` AES-256-GCM envelope, the
   legacy AES-256-CBC reader, key normalisation, and decryption. **Decrypt only.**
-- `src/master-key-unwrap-core.js` — PBKDF2-HMAC-SHA256, 600,000 iterations,
+- `src/master-key-unwrap-core.js`: PBKDF2-HMAC-SHA256, 600,000 iterations,
   per-user 16-byte salt; master-key unwrap; the one-way auth hash derivation.
-- `src/pki-encryption.js` — RSA-OAEP 2048 with SHA-256 and the authenticated
+- `src/pki-encryption.js`: RSA-OAEP 2048 with SHA-256 and the authenticated
   `gcm2:` hybrid envelope used to seal a share key to a recipient.
-- `src/kdf-migration-bucket.js` — which key derivation an account is on.
+- `src/kdf-migration-bucket.js`: which key derivation an account is on.
 
 ## What you can verify here
 

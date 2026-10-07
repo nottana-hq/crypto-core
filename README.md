@@ -39,20 +39,28 @@ product repository, as do the callers, the feature flags that decide a cipher at
 runtime, the deployment configuration and every line of the server. So "items
 are sealed with AES-256-GCM" is a claim about the product, supported by the
 architecture document and by what you can observe of the format these files
-read. It is not a claim this repository on its own can settle, and an earlier
-version of this section said otherwise.
+read. It is not a claim this repository on its own can settle.
 
 Reading these files also tells you nothing about what our authentication backend
 does with a credential it receives. That is the asymmetry an independent audit
-would address, and we would rather name it than let four client files imply more
-reach than they have.
+would address.
 
 **It does not prove** the bundle your browser executed was built from this source.
 A server can serve different code to different users without detection, which is
 the structural limit of all browser-delivered end-to-end encryption. We publish a
-per-release hash manifest at `/build-manifest.json` so you can at least confirm
-you received the same bundle as everyone else. Reproducible builds, which would
-close the gap properly, are scoped and not done.
+per-release hash manifest at `/build-manifest.json`, listing a SHA-256 for every
+file in the release.
+
+Be precise about what that buys. The manifest is served by the same infrastructure as the bundle, so a
+server able to tamper with one can serve a matching copy of the other. It lets
+you compare what you received against what someone ELSE reports receiving. It is
+worthless as self-attestation, and it becomes evidence only once a release
+digest is pinned somewhere we do not control, which is not done.
+
+Reproducible builds are often offered as the answer and they are a different
+answer. They establish that a given artifact was built from this source. They
+say nothing about WHICH artifact your browser was served, which is the gap
+above. Both are scoped rather than built.
 
 **It is not a security audit.** We have not had one. Reading this code is reading
 our work, not an independent review of it.
@@ -79,9 +87,9 @@ needs with the date attached.
 
 | | |
 | --- | --- |
-| Web app version | 1.46.4 |
-| Source commit | `af17b3440b60cb5a77833b412d4e68c5e0ccf6bc` |
-| Copied | 2026-10-07 |
+| Web app version | 1.46.5 |
+| Source commit | `ec5b355a9211b7bff7dd9980148c39c05209fa2a` |
+| Copied | 2026-10-07 UTC |
 
 Updated on each release that changes these files. If this copy ever disagrees
 with what the product serves, that is a defect and we want to hear about it.
