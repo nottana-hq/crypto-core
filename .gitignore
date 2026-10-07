@@ -1,0 +1,2 @@
+# Installed by `npm install` so `node verify.mjs` can run. Never published.
+node_modules/

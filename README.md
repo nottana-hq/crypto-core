@@ -27,10 +27,25 @@ their own.
 
 ## What publishing this proves, and what it does not
 
-**It proves** the algorithms and parameters are what we say: that derivation is
-PBKDF2-HMAC-SHA256 at 600,000 iterations rather than something weaker, that items
-are sealed with AES-256-GCM, that share keys are wrapped with RSA-OAEP, and that
-nothing here transmits a key anywhere.
+**It proves** what these four files do, and that is narrower than it sounds. You
+can read the derivation and see PBKDF2-HMAC-SHA256 at 600,000 iterations with a
+per-user salt. You can read the `v2:` envelope and the RSA-OAEP hybrid and see
+how they are opened. You can confirm that nothing here transmits a key anywhere,
+because nothing here touches the network.
+
+**It does not prove what the writers do**, because the writers are not here.
+`decrypt-core.js` only decrypts. The code that seals an item lives in the
+product repository, as do the callers, the feature flags that decide a cipher at
+runtime, the deployment configuration and every line of the server. So "items
+are sealed with AES-256-GCM" is a claim about the product, supported by the
+architecture document and by what you can observe of the format these files
+read. It is not a claim this repository on its own can settle, and an earlier
+version of this section said otherwise.
+
+Reading these files also tells you nothing about what our authentication backend
+does with a credential it receives. That is the asymmetry an independent audit
+would address, and we would rather name it than let four client files imply more
+reach than they have.
 
 **It does not prove** the bundle your browser executed was built from this source.
 A server can serve different code to different users without detection, which is
@@ -54,21 +69,41 @@ still be read: `algorithm = "aes-256-cbc"` in `decrypt-core.js` and
 `KDF_V1_VERSION` in `master-key-unwrap-core.js`. Each says so where it is
 defined. New writes use AES-256-GCM and PBKDF2-600k.
 
-You will find no measured figures here, such as how many accounts remain on an
-older format. A code comment carries no date, so a number in one goes stale
-without anyone noticing. Those live in the architecture document, which is
-versioned.
+You will find no measured figures IN THE SOURCE, such as how many records remain
+on an older format. A code comment carries no date, so a number in one goes
+stale without anyone noticing. Dated figures live in the architecture document,
+which is versioned, and `llms.txt` beside this file repeats the few a reviewer
+needs with the date attached.
 
 ## Provenance
 
 | | |
 | --- | --- |
 | Web app version | 1.46.4 |
-| Source commit | `6d92eefa9334bffe0c43bafdb6a3c4e2dc898c20` |
-| Copied | 2026-10-03 |
+| Source commit | `af17b3440b60cb5a77833b412d4e68c5e0ccf6bc` |
+| Copied | 2026-10-07 |
 
 Updated on each release that changes these files. If this copy ever disagrees
 with what the product serves, that is a defect and we want to hear about it.
+
+## Checking it yourself
+
+`package.json` pins both runtime dependencies to exact versions, and
+`package-lock.json` pins everything under them, so two reviewers reach the same
+answer rather than testing against whatever version happened to be installed. `test-vectors.json` holds fixed inputs and expected outputs, and
+`verify.mjs` runs them:
+
+```bash
+npm install
+node verify.mjs
+```
+
+The vectors cover the formats these files read, the refusals they owe you, and
+the two findings a public review reproduced in October 2026 and which are now
+closed: a decrypt failure must not put plaintext in a log, and an invalid salt
+must be refused rather than silently truncated to nothing.
+
+`llms.txt` states the same scope in a form an automated reviewer can read first.
 
 ## Found something wrong?
 

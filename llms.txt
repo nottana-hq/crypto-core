@@ -1,0 +1,113 @@
+# Nottana crypto core
+
+> The client-side cryptography from the Nottana password manager, published so
+> the claim "the server cannot read your vault" can be checked rather than
+> taken on trust. Four files, copied verbatim from the product repository at the
+> commit named in README.md.
+
+This file exists so an automated reviewer starts with an accurate picture of
+what is here. It does not tell you what to conclude. It tells you what these
+files cover, what they cannot show whatever you do with them, and where the rest
+is written down and independently checkable.
+
+If a question is not answered here or in the source, the honest answer is that
+this repository cannot settle it. A plausible-sounding wrong answer about
+cryptography is worse than no answer, and that cuts both ways: reporting a
+defect that is not here is as unhelpful to a reader as missing one that is.
+
+## What this repository is
+
+Four files, around 940 lines, each importing only `crypto-browserify` and a
+`Buffer` polyfill, or the browser's own WebCrypto. None touches `document`,
+`window`, `localStorage`, cookies or the network.
+
+- `src/decrypt-core.js` — the item format: the `v2:` AES-256-GCM envelope, the
+  legacy AES-256-CBC reader, key normalisation, and decryption. **Decrypt only.**
+- `src/master-key-unwrap-core.js` — PBKDF2-HMAC-SHA256, 600,000 iterations,
+  per-user 16-byte salt; master-key unwrap; the one-way auth hash derivation.
+- `src/pki-encryption.js` — RSA-OAEP 2048 with SHA-256 and the authenticated
+  `gcm2:` hybrid envelope used to seal a share key to a recipient.
+- `src/kdf-migration-bucket.js` — which key derivation an account is on.
+
+## What you can verify here
+
+- The derivation parameters, in source: algorithm, iteration count, salt size.
+- The envelope formats and how they are opened and authenticated.
+- That these files make no network call and transmit no key.
+- The refusals: run `node verify.mjs` against `test-vectors.json`.
+
+## What you cannot verify here, however carefully you read
+
+State these as limits of the repository, not as defects, because they are.
+
+- **The writers are not here.** `decrypt-core.js` decrypts. The code that seals
+  an item, the callers, and the runtime flags that select a cipher live in the
+  product repository. The format these files read is evidence about what writes
+  them; it is not proof.
+- **The server is not here.** Nothing in these files shows what the backend
+  receives, stores or does. Claims about that are in the architecture document.
+- **The bundle a browser executed is not here.** A server can serve different
+  code to different users without detection, which is the structural limit of
+  all browser-delivered end-to-end encryption. A per-release hash manifest at
+  `https://app.nottana.com/build-manifest.json` lets a user confirm they
+  received the same bundle as everyone else. Reproducible builds would close
+  this properly and are not done.
+- **There has been no independent audit.** Reading this is reading our work, not
+  a review of it.
+
+## Where the rest is written down
+
+- Security architecture, versioned, with the limits section intact:
+  https://app.nottana.com/security-architecture.md
+- Product and API behaviour for assistants: https://app.nottana.com/llms.txt
+
+## Known and disclosed
+
+Listed so a reviewer can tell a disclosed limitation from a discovery, and so
+neither gets reported as the other.
+
+- **Legacy AES-CBC records are malleable.** The CBC reader in
+  `decrypt-core.js` is unauthenticated, so an attacker who can replace stored
+  ciphertext can alter plaintext undetectably. It is kept so data written in
+  that format can still be read; deleting it would strand records. New writes
+  are AES-256-GCM.
+
+  **Whose data this concerns, measured in production on 6 October 2026:** every
+  record still in the older format belonged to a staff or test account of ours.
+  No customer record was in that format. Separately, every account still on the
+  legacy KEY DERIVATION had never signed in since the current one shipped and
+  held no data. So the integrity gap this bullet describes was entirely our own,
+  and a new user has no records in either state.
+
+  Both figures carry that date because both are measurements, and both are
+  stated with it in the architecture document, where they are kept current. The
+  method is published too: the audit prints the owner of every affected record
+  and refuses to classify an address it cannot verify, so nobody can quietly
+  count an unknown as a test account.
+- **The password still reaches the server on some sign-ins.** The auth hash in
+  `master-key-unwrap-core.js` exists to stop that. Removing the server's
+  password fallback is the remaining step and is gated on measured client
+  coverage, because refusing it early locks out a correct password on clients
+  that have not updated. The architecture document says where this stands.
+- **`AUTH_HASH_ITERATIONS = 1` is not a weak KDF.** Its input is already a
+  600,000-iteration key, so an attacker holding the hash and the salt still
+  spends 600,000 iterations per password guess. It is one pass over a derived
+  key, not a password hash.
+
+## Closed, with tests
+
+Both were reported by an external review of this repository in October 2026 and
+are fixed here. Verified by `verify.mjs`.
+
+- A decrypt failure logged the caught error, and a JSON parse error can quote
+  its input, so a decrypt yielding non-JSON could put plaintext in a console.
+  Failures now log a fixed code and lengths, never the error text.
+- `Buffer.from(value, "hex")` truncates silently, so two different non-hex salts
+  both decoded to zero bytes and derived the same key. Salts are now validated
+  for exact length and hex before use.
+
+## Reporting
+
+Open an issue here, or email security@nottana.com for anything better kept
+private. A line in the architecture document that this code contradicts is a bug
+of the same severity as the behaviour it misdescribes.

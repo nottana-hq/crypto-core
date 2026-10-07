@@ -1,0 +1,62 @@
+{
+  "_about": "Fixed inputs and expected outputs for the published files. Run with `node verify.mjs` after `npm install`. Pinned dependency versions are in package.json, so a disagreement here is about the cryptography rather than about which library version happened to be installed.",
+  "_generated": "Computed by running the published source, not written by hand.",
+  "kdf": {
+    "_about": "PBKDF2-HMAC-SHA256, 600,000 iterations, 16-byte salt. The expected keys below are the full 32-byte output in hex.",
+    "accepts": [
+      {
+        "label": "all-zero salt",
+        "password": "correct horse battery staple",
+        "saltHex": "00000000000000000000000000000000",
+        "expectedKeyHex": "0460eeec7ddf8b5f91f2037b3e2ab248f7c5d88dbecabb50a4269e518f1948cd"
+      },
+      {
+        "label": "random-looking salt",
+        "password": "Str0ng!Passw0rd",
+        "saltHex": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+        "expectedKeyHex": "e5a68f89199d4f290ae96a52a427ccf3fae7d01d05fc4ef9486ef36c35dbb83e"
+      },
+      {
+        "label": "upper-case hex salt, same key as lower case",
+        "password": "Str0ng!Passw0rd",
+        "saltHex": "A1B2C3D4E5F60718293A4B5C6D7E8F90",
+        "expectedKeyHex": "e5a68f89199d4f290ae96a52a427ccf3fae7d01d05fc4ef9486ef36c35dbb83e"
+      }
+    ],
+    "refuses": [
+      {
+        "label": "a non-hex salt",
+        "saltHex": "zzzz",
+        "_why": "Buffer.from(_, 'hex') used to truncate this to zero bytes and derive a key from nothing."
+      },
+      {
+        "label": "a non-hex salt of different text",
+        "saltHex": "not-hex-at-all",
+        "_why": "Decoded to the same zero bytes as the one above, so two different wrong salts derived the IDENTICAL key."
+      },
+      {
+        "label": "a valid hex prefix followed by junk",
+        "saltHex": "deadbeefZZZZ",
+        "_why": "Truncated to 4 bytes without complaint."
+      },
+      { "label": "too short", "saltHex": "abc" },
+      { "label": "too long", "saltHex": "0000000000000000000000000000000000" },
+      { "label": "empty", "saltHex": "" },
+      { "label": "not a string", "saltHex": 12345 },
+      { "label": "an empty password", "password": "", "saltHex": "00000000000000000000000000000000" }
+    ]
+  },
+  "envelope": {
+    "_about": "Round trips and refusals are checked against envelopes verify.mjs seals at run time, because a GCM envelope embeds a random IV and a fixed one would only test one nonce.",
+    "key": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
+    "payload": {
+      "username": "alice",
+      "password": "s3cr3t",
+      "note": "hello unicode and emoji"
+    }
+  },
+  "logLeak": {
+    "_about": "A decrypt that succeeds cryptographically but yields invalid JSON. The marker must not appear in any log line; a fixed failure code must.",
+    "marker": "SENSITIVE-PLAINTEXT-MARKER"
+  }
+}

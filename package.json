@@ -1,0 +1,15 @@
+{
+  "name": "@nottana/crypto-core-mirror",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Read-only mirror of Nottana's client cryptography, with pinned dependencies and test vectors so a reviewer can reproduce rather than guess.",
+  "scripts": {
+    "verify": "node verify.mjs"
+  },
+  "dependencies": {
+    "buffer": "6.0.3",
+    "crypto-browserify": "3.12.1"
+  },
+  "license": "SEE LICENSE IN LICENSE"
+}

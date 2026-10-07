@@ -61,24 +61,178 @@ export const KDF_V2_VERSION = "pbkdf2-sha256-600k-v2";
 export const KDF_V2_ITERATIONS = 600000;
 export const KDF_V2_SALT_BYTES = 16;
 
+// One pass over an input that already cost 600,000 iterations. The expense that
+// protects a weak password is paid deriving the wrapping key; this step exists
+// to make the value one-way, not to make it slow.
+export const AUTH_HASH_ITERATIONS = 1;
+export const AUTH_HASH_VERSION = "pbkdf2-authhash-v1";
+
 // performance.now() where available (monotonic, sub-ms), Date.now() otherwise.
 const nowMs = () =>
   typeof performance !== "undefined" && typeof performance.now === "function"
     ? performance.now()
     : Date.now();
 
-// Derive the 32-byte password-wrapping key via PBKDF2-HMAC-SHA256.
-export const deriveWrappingKeyV2 = (password, saltHex) => {
-  if (!password || !saltHex) {
-    throw new Error("deriveWrappingKeyV2 requires password and saltHex.");
+
+/*
+  WHY THE SALT IS VALIDATED AND NOT MERELY CHECKED FOR TRUTHINESS.
+
+  `Buffer.from(saltHex, "hex")` does not fail on invalid input. It stops at the
+  first character it cannot read and returns what it had, so a non-hex salt
+  becomes a ZERO-BYTE salt and two different wrong salts derive the IDENTICAL
+  key. An external review of the published copy of this file reproduced it in
+  October 2026 (summarised in the mirror's `llms.txt`):
+
+      "zzzz"            -> 0 bytes
+      "not-hex-at-all"  -> 0 bytes   same derived key
+      "deadbeefZZZZ"    -> 4 bytes   silently truncated
+
+  A truthiness check cannot see any of that. The shape is known exactly - this
+  salt is written by `generateKdfV2SaltHex`, 16 bytes, lower-case hex - so the
+  primitive asserts it rather than trusting its caller. Callers in this repo
+  already validate at the route boundary; a published primitive has callers we
+  do not control.
+*/
+
+/** 16 bytes as hex. The one shape `generateKdfV2SaltHex` produces. */
+const KDF_V2_SALT_HEX_LENGTH = KDF_V2_SALT_BYTES * 2;
+
+const HEX_ONLY = /^[0-9a-fA-F]+$/;
+
+/**
+ * Decode a v2 KDF salt, or throw.
+ *
+ * @param {unknown} saltHex
+ * @param {string} caller name used in the message, so a failure says where
+ * @returns {Buffer} exactly KDF_V2_SALT_BYTES bytes
+ */
+const decodeKdfSalt = (saltHex, caller) => {
+  if (typeof saltHex !== "string" || saltHex.length === 0) {
+    throw new Error(`${caller} requires a hex salt string.`);
   }
+  if (saltHex.length !== KDF_V2_SALT_HEX_LENGTH) {
+    throw new Error(
+      `${caller} requires a ${KDF_V2_SALT_HEX_LENGTH}-character hex salt.`,
+    );
+  }
+  if (!HEX_ONLY.test(saltHex)) {
+    throw new Error(`${caller} requires a hex salt; got a non-hex value.`);
+  }
+  const salt = Buffer.from(saltHex, "hex");
+  // Belt and braces: the length test above makes this unreachable, and an
+  // unreachable check on a key derivation costs nothing worth saving.
+  if (salt.length !== KDF_V2_SALT_BYTES) {
+    throw new Error(`${caller} decoded a salt of the wrong length.`);
+  }
+  return salt;
+};
+
+/**
+ * Derive the 32-byte password-wrapping key via PBKDF2-HMAC-SHA256.
+ *
+ * Validates both inputs before deriving anything: see decodeKdfSalt above for
+ * why a truthiness check was not enough.
+ *
+ * @param {string} password
+ * @param {string} saltHex - 32 hex characters, the account's masterKeyKdf.salt
+ * @returns {Buffer} 32 bytes
+ * @throws {Error} the password is absent or the salt is not a 32-character hex
+ *   string. It throws rather than deriving from a silently truncated salt.
+ */
+export const deriveWrappingKeyV2 = (password, saltHex) => {
+  if (typeof password !== "string" || password.length === 0) {
+    throw new Error("deriveWrappingKeyV2 requires a password string.");
+  }
+  const salt = decodeKdfSalt(saltHex, "deriveWrappingKeyV2");
   return crypto.pbkdf2Sync(
     Buffer.from(password, "utf8"),
-    Buffer.from(saltHex, "hex"),
+    salt,
     KDF_V2_ITERATIONS,
     32,
     "sha256",
   );
+};
+
+/**
+ * The value sent to the server to prove you know the password.
+ *
+ * WHY THIS EXISTS. Sign-in used to post the password itself. The server also
+ * stores the wrapped master key, the salt and the iteration count, so during a
+ * login it held every input needed to derive the wrapping key and unwrap the
+ * master key. A stolen database never yielded that, because what is stored is a
+ * bcrypt hash. A compromised live server did, for every account signing in while
+ * it was there.
+ *
+ * This closes that. The server receives a value derived FROM the wrapping key by
+ * a one-way function, so it can check that you know the password without holding
+ * anything it can turn back into a key. An attacker with the database is no
+ * better off than before, since guessing the password still costs 600,000
+ * iterations. An attacker with the live server stops being handed the answer.
+ *
+ * THE ORDER MATTERS. The wrapping key is derived first, at full cost, and the
+ * auth hash is one cheap pass over it. Deriving the two independently from the
+ * password would double the work on every login for no gain, and deriving the
+ * wrapping key FROM the auth hash would hand the server the input to the key.
+ *
+ * The second pass uses the password as the salt, so two accounts with the same
+ * wrapping key could not produce the same auth hash. One iteration is enough
+ * because the input is already a 600,000-iteration derivation; the cost that
+ * protects a weak password was paid above.
+ *
+ * @param {string} password
+ * @param {string} saltHex - the account's masterKeyKdf.salt, 32 hex characters
+ * @returns {Promise<string>} 32 bytes, hex
+ * @throws {Error} the password is absent, or the salt is not a 32-character hex
+ *   string (checked by the wrapping-key derivation this delegates to)
+ */
+export const deriveAuthHash = async (password, saltHex) => {
+  /*
+    Left in front of the delegate deliberately, so the message names THIS
+    function. deriveWrappingKeyV2Async validates properly - exact length and hex
+    - and this only catches the absent case, which is the one worth attributing
+    to the caller that asked for an auth hash.
+  */
+  if (!password || !saltHex) {
+    throw new Error("deriveAuthHash requires password and saltHex.");
+  }
+  const wrappingKey = await deriveWrappingKeyV2Async(password, saltHex);
+  return crypto
+    .pbkdf2Sync(
+      Buffer.from(wrappingKey),
+      Buffer.from(password, "utf8"),
+      AUTH_HASH_ITERATIONS,
+      32,
+      "sha256",
+    )
+    .toString("hex");
+};
+
+/**
+ * Same derivation from an ALREADY-DERIVED wrapping key.
+ *
+ * A login derives the wrapping key anyway, to unwrap the master key. Passing it
+ * in avoids paying 600,000 iterations a second time, which on an older phone is
+ * the difference between a sign-in that feels instant and one that does not.
+ *
+ * @param {Buffer|Uint8Array} wrappingKey
+ * @param {string} password
+ * @returns {string} 32 bytes, hex
+ */
+export const deriveAuthHashFromWrappingKey = (wrappingKey, password) => {
+  if (!wrappingKey || !password) {
+    throw new Error(
+      "deriveAuthHashFromWrappingKey requires wrappingKey and password.",
+    );
+  }
+  return crypto
+    .pbkdf2Sync(
+      Buffer.from(wrappingKey),
+      Buffer.from(password, "utf8"),
+      AUTH_HASH_ITERATIONS,
+      32,
+      "sha256",
+    )
+    .toString("hex");
 };
 
 /**
@@ -109,9 +263,16 @@ export const deriveWrappingKeyV2 = (password, saltHex) => {
  * shipped this pattern in production for the share-key path.
  */
 export const deriveWrappingKeyV2Async = async (password, saltHex, { onPath } = {}) => {
-  if (!password || !saltHex) {
-    throw new Error("deriveWrappingKeyV2Async requires password and saltHex.");
+  if (typeof password !== "string" || password.length === 0) {
+    throw new Error("deriveWrappingKeyV2Async requires a password string.");
   }
+  /*
+    Validated HERE as well as in the sync function, not instead of it. This path
+    has its own `Buffer.from(saltHex, "hex")` below for the WebCrypto branch, so
+    relying on the sync fallback to validate would leave the fast path - the one
+    that actually runs on a real device - unchecked.
+  */
+  const salt = decodeKdfSalt(saltHex, "deriveWrappingKeyV2Async");
   // `onPath` reports which branch actually ran. It exists because the fallback
   // below is SILENT, because its console.warn is stripped from production
   // builds. So "the fast path shipped" and "the fast path ran on this device"
@@ -144,7 +305,7 @@ export const deriveWrappingKeyV2Async = async (password, saltHex, { onPath } = {
     const bits = await subtle.deriveBits(
       {
         name: "PBKDF2",
-        salt: Buffer.from(saltHex, "hex"),
+        salt,
         iterations: KDF_V2_ITERATIONS,
         hash: "SHA-256",
       },
