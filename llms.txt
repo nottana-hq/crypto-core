@@ -49,9 +49,19 @@ State these as limits of the repository, not as defects, because they are.
 - **The bundle a browser executed is not here.** A server can serve different
   code to different users without detection, which is the structural limit of
   all browser-delivered end-to-end encryption. A per-release hash manifest at
-  `https://app.nottana.com/build-manifest.json` lets a user confirm they
-  received the same bundle as everyone else. Reproducible builds would close
-  this properly and are not done.
+  `https://app.nottana.com/build-manifest.json` lists a SHA-256 for every file
+  in the release, and it is served by the same infrastructure as the bundle,
+  so a server able to tamper with one can serve a matching copy of the other.
+  It is worthless as self-attestation. What it supports is one user comparing
+  what they received against what ANOTHER user reports receiving, and it
+  becomes evidence only once a release digest is pinned somewhere Nottana does
+  not control, which is not done. Do not describe the manifest as letting
+  someone confirm they got the same bundle as everyone else.
+- **Reproducible builds are a DIFFERENT answer, not this one.** They establish
+  that a given artifact was built from this source. They say nothing about
+  WHICH artifact a browser was served, which is the gap above. Both are
+  scoped and neither is built, so do not describe reproducible builds as what
+  would close the serving gap.
 - **There has been no independent audit.** Reading this is reading our work, not
   a review of it.
 

@@ -16,18 +16,19 @@ can see, and the limits.
 | File | What it decides |
 | --- | --- |
 | `src/decrypt-core.js` | The item encryption format: algorithm, IV length, the `v2:` envelope, key normalisation, and decryption for both formats |
-| `src/master-key-unwrap-core.js` | How a password becomes a key (PBKDF2-HMAC-SHA256, 600,000 iterations, per-user 16-byte salt) and how the master key is unwrapped |
+| `src/master-key-unwrap-core.js` | How a password becomes a key (PBKDF2-HMAC-SHA256, 600,000 iterations, per-user 16-byte salt), how the master key is unwrapped, and how the one-way value that authenticates a sign-in is derived from that key |
 | `src/pki-encryption.js` | RSA-OAEP 2048 with SHA-256, and the authenticated `gcm2:` hybrid envelope used to seal share keys to a recipient |
 | `src/kdf-migration-bucket.js` | Which key derivation an account is on |
+| `src/login-credential-policy.js` | What a sign-in puts on the wire: when the derived value is sent alone, and the one case that still carries a password |
 
-938 lines. Each file imports only `crypto-browserify` and a `Buffer` polyfill,
+1473 lines, which `wc -l src/*.js` will confirm. Each file imports only `crypto-browserify` and a `Buffer` polyfill,
 or the browser's own WebCrypto. None of them touches `document`, `window`,
 `localStorage`, cookies or the network, which is what makes them readable on
 their own.
 
 ## What publishing this proves, and what it does not
 
-**It proves** what these four files do, and that is narrower than it sounds. You
+**It proves** what these five files do, and that is narrower than it sounds. You
 can read the derivation and see PBKDF2-HMAC-SHA256 at 600,000 iterations with a
 per-user salt. You can read the `v2:` envelope and the RSA-OAEP hybrid and see
 how they are opened. You can confirm that nothing here transmits a key anywhere,
@@ -87,9 +88,9 @@ needs with the date attached.
 
 | | |
 | --- | --- |
-| Web app version | 1.46.5 |
-| Source commit | `ec5b355a9211b7bff7dd9980148c39c05209fa2a` |
-| Copied | 2026-10-07 UTC |
+| Web app version | 1.47.1 |
+| Source commit | `d6e62bee902996107546edf2e73ae3e7d65674cc` |
+| Copied | 2026-10-15 UTC |
 
 Updated on each release that changes these files. If this copy ever disagrees
 with what the product serves, that is a defect and we want to hear about it.
